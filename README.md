@@ -28,10 +28,10 @@ information see:
 # Installation
 
 ``` shell
-pip install utide
+pip install -e git+git://github.com/treden/UTide.git@master#egg=utide
 ```
 
-If you are using conda,
+If you are using conda (not yet),
 
 ``` shell
 conda install utide --channel conda-forge
