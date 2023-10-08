@@ -5,6 +5,11 @@
 [![downloads](https://anaconda.org/conda-forge/utide/badges/downloads.svg)](https://anaconda.org/conda-forge/utide)
 [![anaconda_cloud](https://anaconda.org/conda-forge/utide/badges/version.svg)](https://anaconda.org/conda-forge/utide)
 
+Fork development version : Adaptation of 1D solver (OLS only) and reconstruct functions to support 2D inputs in a vectorized approach. Adaptation of UTide Bunch objects in order to keep an identical workflow with the original, with a transparent use of 1D and 2D inputs.
+The development is motivated by a need to improve the efficiency of the library when processing 2D model poutputs, SWOT data or other groups of timeseries, while keeping profit of the versatile approach and methods developed in the UTide library. 
+
+    # Supporting only 1-D arrays for now; we can add "group"
+    # support later.
 Python re-implementation of the Matlab package UTide.
 
 Still in heavy development\--everything is subject to change!
