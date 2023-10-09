@@ -609,26 +609,25 @@ def _solv2(tin, uin, vin, lat, **opts):
             coef.theta = np.hstack((coef.theta, theta))
             coef.g = np.hstack((coef.g, g))
 
-    # TODO: 2D OLS Confidence intervals
-    # if opt["conf_int"]:
-    #     coef = _confidence(
-    #         coef,
-    #         cnstit,
-    #         opt,
-    #         t,
-    #         e,
-    #         tin,
-    #         elor,
-    #         xraw,
-    #         xmod,
-    #         W,
-    #         m,
-    #         B,
-    #         Xu,
-    #         Yu,
-    #         Xv,
-    #         Yv,
-    #     )
+    if opt["conf_int"]:
+        coef = _confidence(
+            coef,
+            cnstit,
+            opt,
+            t,
+            e,
+            tin,
+            elor,
+            xraw,
+            xmod,
+            W,
+            m,
+            B,
+            Xu,
+            Yu,
+            Xv,
+            Yv,
+        )
 
     # Diagnostics.
     # TODO: 2D Diagnostics 

@@ -173,31 +173,50 @@ def _confidence(
     It returns its first argument, the coef dictionary,
     with additional entries.
     """
-
+    
+    if xraw.ndim == 1:
+        nx = 1
+    elif xraw.ndim == 2:
+        nx = len(xraw)
+        
     # Confidence Intervals.
     if not opt["white"]:
-        Puu, Pvv, Puv = band_averaged_psd_by_constit(tin, t, e, elor, coef, opt)  # noqa
+        
+        if nx != 1:
+            P = [band_averaged_psd_by_constit(tin, t, e[0], elor, coef, opt) for i in range(nx)]
+            Puu, Pvv, Puv = np.vstack([p[0] for p in P]).T, np.vstack([p[1] for p in P]).T, np.vstack([p[2] for p in P]).T
 
+        else:
+            Puu, Pvv, Puv = band_averaged_psd_by_constit(tin, t, e, elor, coef, opt)  # noqa
     # Make temporaries for quantities needed more than once.
     _Wx = W * xraw
     _WB = W[:, np.newaxis] * B
-
+    
+    
     # Matlab is recalculating xmod here; but we already have it.
     # In the 1-D case xmod is only the real part, but in that
     # case _Wx is real, and we are taking the real part in the
     # end, so the imaginary part would not contribute anything.
-    nt = len(xraw)
+    nt = len(xraw.T)
     nm = B.shape[1]
+    
+
 
     # Mean Square Misfit: Eq. 52 (mean squared error).
-    varMSM = np.real(np.dot(xraw.conj(), _Wx) - np.dot(xmod.conj(), _Wx)) / (nt - nm)
-
-    # Gamma_C: covariance Eq. 54.
-    gamC = np.linalg.inv(np.dot(B.conj().T, _WB)) * varMSM
-
+    # Gamma_C: covariance Eq. 54.  
     # Gamma_P: pseudo-covariance Eq. 54.
-    gamP = np.linalg.inv(np.dot(B.T, _WB))
-    gamP *= (np.dot(xraw, _Wx) - np.dot(xmod, _Wx)) / (nt - nm)
+    
+    if nx == 1:
+        varMSM = np.real(np.dot(xraw.conj(), _Wx) - np.dot(xmod.conj(), _Wx)) / (nt - nm)
+        gamC = np.linalg.inv(np.dot(B.conj().T, _WB)) * varMSM
+        gamP = np.linalg.inv(np.dot(B.T, _WB))
+        gamP *= (np.dot(xraw, _Wx) - np.dot(xmod, _Wx)) / (nt - nm)
+        
+    elif nx != 1:
+        varMSM = np.hstack([np.real(np.dot(xraw[i].conj(), _Wx[i]) - np.dot(xmod[i].conj(), _Wx[i])) / (nt - nm) for i in range(nx)])
+        gamC = np.array([np.linalg.inv(np.dot(B.conj().T, _WB)) * varMSM[i] for i in range(nx)])   
+        gamP = np.linalg.inv(np.dot(B.T, _WB))
+        gamP = np.array([gamP*((np.dot(xraw[i], _Wx[i]) - np.dot(xmod[i], _Wx[i])) / (nt - nm)) for i in range(nx)])
 
     del _Wx, _WB
 
@@ -211,14 +230,19 @@ def _confidence(
         coef.Lsmaj_ci = coef.g_ci.copy()
         coef.Lsmin_ci = coef.g_ci.copy()
         coef.theta_ci = coef.g_ci.copy()
-        varcov_mCw = np.nan * np.ones((nc, 4, 4))
+        varcov_mCw = np.nan * np.squeeze(np.ones((nc, nx, 4, 4)))
     else:
         coef.A_ci = coef.g_ci.copy()
-        varcov_mCw = np.nan * np.ones((nc, 2, 2))
+        varcov_mCw = np.nan * np.squeeze(np.ones((nc, nx, 2, 2)))
 
     if not opt["white"]:
         varcov_mCc = np.copy(varcov_mCw)
 
+    # Needed in the 2D case in order to isolate the nx dimension in the computations
+    if nx !=1:
+        Gall = np.moveaxis(Gall, 0, -1)
+        Hall = np.moveaxis(Hall, 0, -1)
+        
     for c in range(nc):
         G = np.array(
             [[Gall[c, c], Gall[c, c + nc]], [Gall[c + nc, c], Gall[c + nc, c + nc]]],
@@ -226,8 +250,10 @@ def _confidence(
         H = np.array(
             [[Hall[c, c], Hall[c, c + nc]], [Hall[c + nc, c], Hall[c + nc, c + nc]]],
         )
+        
         varXu = np.real(G[0, 0] + G[1, 1] + 2 * G[0, 1]) / 2
         varYu = np.real(H[0, 0] + H[1, 1] - 2 * H[0, 1]) / 2
+        
 
         if opt["twodim"]:
             varXv = np.real(H[0, 0] + H[1, 1] + 2 * H[0, 1]) / 2
@@ -235,16 +261,34 @@ def _confidence(
 
         if opt["linci"]:  # Linearized.
             if not opt["twodim"]:
-                varcov_mCw[c, :, :] = np.diag(np.array([varXu, varYu]))
+                
+                if nx != 1:
+                    varcov_mCw[c, :, :] = [np.diag(np.array([varXu[i], varYu[i]])) for i in range(nx)]
+                else:
+                    varcov_mCw[c, :, :] = np.diag(np.array([varXu, varYu]))
+                                                            
                 if not opt["white"]:
                     den = varXu + varYu
+
                     varXu = Puu[c] * varXu / den
                     varYu = Puu[c] * varYu / den
-                    varcov_mCc[c, :, :] = np.diag(np.array([varXu, varYu]))
-                sig1, sig2 = ut_linci(Xu[c], Yu[c], np.sqrt(varXu), np.sqrt(varYu))
+
+                    if nx != 1:
+                        varcov_mCc[c, :, :] = [np.diag(np.array([varXu[i], varYu[i]])) for i in range(nx)]
+                    else:
+                        varcov_mCc[c, :, :] = np.diag(np.array([varXu, varYu]))
+                        
+ 
+                
+                if nx != 1:
+                    sig1, sig2 = np.squeeze([ut_linci(Xu[c][i], Yu[c][i], np.sqrt(varXu[i]), np.sqrt(varYu[i])) for i in range(nx)]).T
+                else:
+                    sig1, sig2 = ut_linci(Xu[c], Yu[c], np.sqrt(varXu), np.sqrt(varYu))
+                    
                 coef["A_ci"][c] = 1.96 * sig1
                 coef["g_ci"][c] = 1.96 * sig2
             else:
+                raise NotImplementedError("2D u/v not implemented")
                 varcov_mCw[c, :, :] = np.diag(np.array([varXu, varYu, varXv, varYv]))
                 if not opt["white"]:
                     den = varXv + varYv
@@ -265,137 +309,142 @@ def _confidence(
                 coef["g_ci"][c] = 1.96 * np.real(sig2)
                 coef["theta_ci"][c] = 1.96 * np.imag(sig2)
 
-        else:  # Monte Carlo.
-            covXuYu = np.imag(H[0, 0] - H[0, 1] + H[1, 0] - H[1, 1]) / 2
-            Duu = np.array([[varXu, covXuYu], [covXuYu, varYu]])
-            varcov_mCw[c, :2, :2] = Duu
+#         else:  # Monte Carlo.
+#             if nx != 1:
+#                 raise NotImplementedError("2D Monte Carlo confidence intervals not implemented")
+#             covXuYu = np.imag(H[0, 0] - H[0, 1] + H[1, 0] - H[1, 1]) / 2
+#             Duu = np.array([[varXu, covXuYu], [covXuYu, varYu]])
+#             varcov_mCw[c, :2, :2] = Duu
 
-            if not opt.white:
-                Duu = Puu[c] * Duu / np.trace(Duu)
-                varcov_mCc[c, :2, :2] = Duu
+#             if not opt.white:
+#                 Duu = Puu[c] * Duu / np.trace(Duu)
+#                 varcov_mCc[c, :2, :2] = Duu
 
-            if not opt.twodim:
-                if not opt.white:
-                    varcov_mCc[c, :, :] = nearestSPD(varcov_mCc[c, :, :])
-                    mCall = np.random.multivariate_normal(
-                        (Xu[c], Yu[c]),
-                        varcov_mCc[c],
-                        opt.nrlzn,
-                    )
-                else:
-                    mCall = np.random.multivariate_normal(
-                        (Xu[c], Yu[c]),
-                        varcov_mCw[c],
-                        opt.nrlzn,
-                    )
-                A, _, _, g = ut_cs2cep(mCall)
-                coef.A_ci[c] = (
-                    1.96 * np.median(np.abs(A - np.median(A))) / 0.6745
-                )  # noqa
-                g[0] = coef.g[c]
-                g = cluster(g, 360)
-                coef.g_ci[c] = (
-                    1.96 * np.median(np.abs(g - np.median(g))) / 0.6745
-                )  # noqa
-            else:
-                covXvYv = np.imag(G[0, 0] - G[0, 1] + G[1, 0] - G[1, 1]) / 2
-                Dvv = np.array([[varXv, covXvYv], [covXvYv, varYv]])
-                varcov_mCw[c, 2:, 2:] = Dvv
+#             if not opt.twodim:
+#                 if not opt.white:
+#                     varcov_mCc[c, :, :] = nearestSPD(varcov_mCc[c, :, :])
+#                     mCall = np.random.multivariate_normal(
+#                         (Xu[c], Yu[c]),
+#                         varcov_mCc[c],
+#                         opt.nrlzn,
+#                     )
+#                 else:
+#                     mCall = np.random.multivariate_normal(
+#                         (Xu[c], Yu[c]),
+#                         varcov_mCw[c],
+#                         opt.nrlzn,
+#                     )
+#                 A, _, _, g = ut_cs2cep(mCall)
+#                 coef.A_ci[c] = (
+#                     1.96 * np.median(np.abs(A - np.median(A))) / 0.6745
+#                 )  # noqa
+#                 g[0] = coef.g[c]
+#                 g = cluster(g, 360)
+#                 coef.g_ci[c] = (
+#                     1.96 * np.median(np.abs(g - np.median(g))) / 0.6745
+#                 )  # noqa
+#             else:
+#                 covXvYv = np.imag(G[0, 0] - G[0, 1] + G[1, 0] - G[1, 1]) / 2
+#                 Dvv = np.array([[varXv, covXvYv], [covXvYv, varYv]])
+#                 varcov_mCw[c, 2:, 2:] = Dvv
 
-                if not opt.white:
-                    Dvv = Pvv[c] * Dvv / np.trace(Dvv)
-                    varcov_mCc[c, 2:, 2:] = Dvv
-                covXuXv = np.imag(-H[0, 0] - H[0, 1] - H[1, 0] - H[1, 1]) / 2
-                covXuYv = np.real(G[0, 0] - G[1, 1]) / 2
-                covYuXv = np.real(-H[0, 0] + H[1, 1]) / 2
-                covYuYv = np.imag(-G[0, 0] + G[0, 1] + G[1, 0] - G[1, 1]) / 2
-                Duv = np.array([[covXuXv, covXuYv], [covYuXv, covYuYv]])
-                varcov_mCw[c, :2, 2:] = Duv
-                varcov_mCw[c, 2:, :2] = Duv.T
+#                 if not opt.white:
+#                     Dvv = Pvv[c] * Dvv / np.trace(Dvv)
+#                     varcov_mCc[c, 2:, 2:] = Dvv
+#                 covXuXv = np.imag(-H[0, 0] - H[0, 1] - H[1, 0] - H[1, 1]) / 2
+#                 covXuYv = np.real(G[0, 0] - G[1, 1]) / 2
+#                 covYuXv = np.real(-H[0, 0] + H[1, 1]) / 2
+#                 covYuYv = np.imag(-G[0, 0] + G[0, 1] + G[1, 0] - G[1, 1]) / 2
+#                 Duv = np.array([[covXuXv, covXuYv], [covYuXv, covYuYv]])
+#                 varcov_mCw[c, :2, 2:] = Duv
+#                 varcov_mCw[c, 2:, :2] = Duv.T
 
-                if not opt.white:
-                    if np.abs(Duv).sum() > 0:
-                        Duv = Puv[c] * Duv / np.abs(Duv).sum()
-                        varcov_mCc[c, :2, 2:] = Duv
-                        varcov_mCc[c, 2:, :2] = Duv.T
-                    else:
-                        varcov_mCc[c, :2, 2:] = 0
-                        varcov_mCc[c, 2:, :2] = 0
+#                 if not opt.white:
+#                     if np.abs(Duv).sum() > 0:
+#                         Duv = Puv[c] * Duv / np.abs(Duv).sum()
+#                         varcov_mCc[c, :2, 2:] = Duv
+#                         varcov_mCc[c, 2:, :2] = Duv.T
+#                     else:
+#                         varcov_mCc[c, :2, 2:] = 0
+#                         varcov_mCc[c, 2:, :2] = 0
 
-                    varcov_mCc[c] = nearestSPD(varcov_mCc[c])
-                    mCall = np.random.multivariate_normal(
-                        (Xu[c], Yu[c], Xv[c], Yv[c]),
-                        varcov_mCc[c],
-                        opt.nrlzn,
-                    )  # noqa
-                else:
-                    mCall = np.random.multivariate_normal(
-                        (Xu[c], Yu[c], Xv[c], Yv[c]),
-                        varcov_mCw[c],
-                        opt.nrlzn,
-                    )  # noqa
-                Lsmaj, Lsmin, theta, g = ut_cs2cep(mCall)
-                coef.Lsmaj_ci[c] = (
-                    1.96 * np.median(np.abs(Lsmaj - np.median(Lsmaj))) / 0.6745
-                )  # noqa
-                coef.Lsmin_ci[c] = (
-                    1.96 * np.median(np.abs(Lsmin - np.median(Lsmin))) / 0.6745
-                )  # noqa
-                theta[0] = coef.theta[c]
-                theta = cluster(theta, 360)
-                coef.theta_ci[c] = (
-                    1.96 * np.median(np.abs(theta - np.median(theta))) / 0.6745
-                )  # noqa
-                g[0] = coef.g[c]
-                g = cluster(g, 360)
-                coef.g_ci[c] = (
-                    1.96 * np.median(np.abs(g - np.median(g))) / 0.6745
-                )  # noqa
+#                     varcov_mCc[c] = nearestSPD(varcov_mCc[c])
+#                     mCall = np.random.multivariate_normal(
+#                         (Xu[c], Yu[c], Xv[c], Yv[c]),
+#                         varcov_mCc[c],
+#                         opt.nrlzn,
+#                     )  # noqa
+#                 else:
+#                     mCall = np.random.multivariate_normal(
+#                         (Xu[c], Yu[c], Xv[c], Yv[c]),
+#                         varcov_mCw[c],
+#                         opt.nrlzn,
+#                     )  # noqa
+#                 Lsmaj, Lsmin, theta, g = ut_cs2cep(mCall)
+#                 coef.Lsmaj_ci[c] = (
+#                     1.96 * np.median(np.abs(Lsmaj - np.median(Lsmaj))) / 0.6745
+#                 )  # noqa
+#                 coef.Lsmin_ci[c] = (
+#                     1.96 * np.median(np.abs(Lsmin - np.median(Lsmin))) / 0.6745
+#                 )  # noqa
+#                 theta[0] = coef.theta[c]
+#                 theta = cluster(theta, 360)
+#                 coef.theta_ci[c] = (
+#                     1.96 * np.median(np.abs(theta - np.median(theta))) / 0.6745
+#                 )  # noqa
+#                 g[0] = coef.g[c]
+#                 g = cluster(g, 360)
+#                 coef.g_ci[c] = (
+#                     1.96 * np.median(np.abs(g - np.median(g))) / 0.6745
+#                 )  # noqa
 
     nNR = coef.nNR
 
-    if opt.infer:
-        ind = nc
-        if opt.linci:
-            for k, ref in enumerate(cnstit.R):
-                varcov = varcov_mCw if opt.white else varcov_mCc
-                varReap = 0.25 * varcov[nNR + k, 0, 0]
-                varImap = 0.25 * varcov[nNR + k, 1, 1]
-                if opt.twodim:
-                    varReap += 0.25 * varcov[nNR + k, 3, 3]
-                    varImap += 0.25 * varcov[nNR + k, 2, 2]
-                rp = ref.I.Rp
-                rm = ref.I.Rm
-                varXuHH = (rp.real**2 + rm.real**2) * varReap + (
-                    rp.imag**2 + rm.imag**2
-                ) * varImap
-                varYuHH = (rp.real**2 + rm.real**2) * varImap + (
-                    rp.imag**2 + rm.imag**2
-                ) * varReap
-                for varX, varY in zip(varXuHH, varYuHH):
-                    if not opt.twodim:
-                        sig1, sig2 = ut_linci(
-                            Xu[nNR + k],
-                            Yu[nNR + k],
-                            np.sqrt(varX),
-                            np.sqrt(varY),
-                        )
-                        coef.A_ci[ind] = 1.96 * sig1
-                        coef.g_ci[ind] = 1.96 * sig2
-                    else:
-                        sig1, sig2 = ut_linci(
-                            Xu[nNR + k] + 1j * Xv[nNR + k],
-                            Yu[nNR + k] + 1j * Yv[nNR + k],
-                            np.sqrt(varX) + 1j * np.sqrt(varY),
-                            np.sqrt(varY) + 1j * np.sqrt(varX),
-                        )
-                        coef.Lsmaj_ci[ind] = 1.96 * sig1.real
-                        coef.Lsmin_ci[ind] = 1.96 * sig1.imag
-                        coef.g_ci[ind] = 1.96 * sig2.real
-                        coef.theta_ci[ind] = 1.96 * sig2.imag
-                    ind += 1
-        else:
-            raise NotImplementedError("Monte Carlo inference not implemented")
+#     if opt.infer:
+#         if nx != 1:
+#             raise NotImplementedError("2D inference not implemented")
+        
+#         ind = nc
+#         if opt.linci:
+#             for k, ref in enumerate(cnstit.R):
+#                 varcov = varcov_mCw if opt.white else varcov_mCc
+#                 varReap = 0.25 * varcov[nNR + k, 0, 0]
+#                 varImap = 0.25 * varcov[nNR + k, 1, 1]
+#                 if opt.twodim:
+#                     varReap += 0.25 * varcov[nNR + k, 3, 3]
+#                     varImap += 0.25 * varcov[nNR + k, 2, 2]
+#                 rp = ref.I.Rp
+#                 rm = ref.I.Rm
+#                 varXuHH = (rp.real**2 + rm.real**2) * varReap + (
+#                     rp.imag**2 + rm.imag**2
+#                 ) * varImap
+#                 varYuHH = (rp.real**2 + rm.real**2) * varImap + (
+#                     rp.imag**2 + rm.imag**2
+#                 ) * varReap
+#                 for varX, varY in zip(varXuHH, varYuHH):
+#                     if not opt.twodim:
+#                         sig1, sig2 = ut_linci(
+#                             Xu[nNR + k],
+#                             Yu[nNR + k],
+#                             np.sqrt(varX),
+#                             np.sqrt(varY),
+#                         )
+#                         coef.A_ci[ind] = 1.96 * sig1
+#                         coef.g_ci[ind] = 1.96 * sig2
+#                     else:
+#                         sig1, sig2 = ut_linci(
+#                             Xu[nNR + k] + 1j * Xv[nNR + k],
+#                             Yu[nNR + k] + 1j * Yv[nNR + k],
+#                             np.sqrt(varX) + 1j * np.sqrt(varY),
+#                             np.sqrt(varY) + 1j * np.sqrt(varX),
+#                         )
+#                         coef.Lsmaj_ci[ind] = 1.96 * sig1.real
+#                         coef.Lsmin_ci[ind] = 1.96 * sig1.imag
+#                         coef.g_ci[ind] = 1.96 * sig2.real
+#                         coef.theta_ci[ind] = 1.96 * sig2.imag
+#                     ind += 1
+#         else:
+#             raise NotImplementedError("Monte Carlo inference not implemented")
 
     return coef
 
