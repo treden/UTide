@@ -5,7 +5,7 @@ Robust MLR via iteratively reweighted least squares.
 
 import numpy as np
 
-from utide2D.utilities import Bunch
+from utide.utilities import Bunch
 
 
 # Weighting functions:

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-import utide2D
-from utide2D.utilities import Bunch, convert_unicode_arrays, loadbunch
+import utide
+from utide.utilities import Bunch, convert_unicode_arrays, loadbunch
 
 thisdir = os.path.dirname(__file__)
 datapath = os.path.join(thisdir, "data")
@@ -23,13 +23,13 @@ solve_kw = {
     "conf_int": "linear",
 }
 
-coef_all = utide2D.solve(t, h, **solve_kw)
+coef_all = utide.solve(t, h, **solve_kw)
 
 sl_month = slice(24 * 31)
-coef_month = utide2D.solve(t[sl_month], h[sl_month], **solve_kw)
+coef_month = utide.solve(t[sl_month], h[sl_month], **solve_kw)
 
 sl_week = slice(24 * 7)
-coef_week = utide2D.solve(t[sl_week], h[sl_week], **solve_kw)
+coef_week = utide.solve(t[sl_week], h[sl_week], **solve_kw)
 
 month_index_dict = dict({(name.strip(), i) for i, name in enumerate(coef_month.name)})
 infer = Bunch()
@@ -42,7 +42,7 @@ for ref, inf in zip(infer.reference_names, infer.inferred_names):
     infer.amp_ratios.append(coef_month.A[iinf] / coef_month.A[iref])
     infer.phase_offsets.append(coef_month.g[iref] - coef_month.g[iinf])
 
-coef_week_inf = utide2D.solve(t[sl_week], h[sl_week], infer=infer, **solve_kw)
+coef_week_inf = utide.solve(t[sl_week], h[sl_week], infer=infer, **solve_kw)
 
 runs = [
     (coef_all, "HNL2010.mat"),
