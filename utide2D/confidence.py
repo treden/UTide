@@ -10,9 +10,9 @@ import warnings
 
 import numpy as np
 
-from utide.ellipse_params import ut_cs2cep
-from utide.periodogram import band_psd
-from utide.utilities import complex_interp
+from utide2D.ellipse_params import ut_cs2cep
+from utide2D.periodogram import band_psd
+from utide2D.utilities import complex_interp
 
 
 def band_averaged_psd_by_constit(tin, t, e, elor, coef, opt):
