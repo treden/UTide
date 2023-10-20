@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from utide.utilities import loadbunch
+from utide2D.utilities import loadbunch
 
 datadir = os.path.join(os.path.dirname(__file__))
 

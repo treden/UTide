@@ -15,7 +15,7 @@ to facilitate testing.
 import numpy as np
 from scipy import signal
 
-from utide.utilities import Bunch
+from utide2D.utilities import Bunch
 
 # __all__ = ['freq_bands', 'band_psd']
 

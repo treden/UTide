@@ -341,6 +341,8 @@ def _solv1(tin, uin, vin, lat, **opts):
     Xu = np.real(ap + am)
     Yu = -np.imag(ap - am)
 
+    
+
     if not opt["twodim"]:
         coef["A"], _, _, coef["g"] = ut_cs2cep(Xu, Yu)
         Xv = []
@@ -427,7 +429,7 @@ def _solv1(tin, uin, vin, lat, **opts):
         coef["SNR"] = _SNR(coef)
 
     # Re-order constituents.
-    coef = _reorder(coef, opt)
+    # coef = _reorder(coef, opt)
     # This might have added PE if it was not already present.
 
     # if opt["RunTimeDisp"]:
@@ -453,6 +455,9 @@ def _solv2(tin, uin, vin, lat, **opts):
         opt["cnstit"],
         opt["infer"],
     )
+
+    ic = np.where(cnstit.NR.name == 'M2')[0][0]
+    print(ic)
 
     # a function we don't need
     # coef.aux.rundescr = ut_rundescr(opt,nNR,nR,nI,t,tgd,uvgd,lat)
@@ -530,6 +535,7 @@ def _solv2(tin, uin, vin, lat, **opts):
             m = np.linalg.lstsq(B, xraw.T)[0]
         W = np.ones(nt)  # Uniform weighting; we could use a scalar 1, or None.
 
+
     # Utide2D : The robust fit is not handled (for now?)
     # else:
     #     rf = robustfit(B, xraw, **opt.newopts.robust_kw)
@@ -551,8 +557,11 @@ def _solv2(tin, uin, vin, lat, **opts):
     i0 = 2 * nNR + nR
     am = np.hstack((m[nNR : 2 * nNR].T, m[i0 : i0 + nR].T)).T
 
+    
+
     Xu = np.real(ap + am)
     Yu = -np.imag(ap - am)
+
 
     if not opt["twodim"]:
         coef["A"], _, _, coef["g"] = ut_cs2cep(Xu, Yu)
@@ -718,6 +727,7 @@ def _slvinit(tin, uin, vin, lat, **opts):
 
     # Step 2: generate t, u, v from edited tin, uin, vin.
     v = None
+
     if np.ma.is_masked(uin) or np.ma.is_masked(vin):
         mask = np.ma.getmaskarray(uin)
         if vin is not None:
@@ -732,6 +742,9 @@ def _slvinit(tin, uin, vin, lat, **opts):
         u = uin.filled()
         if vin is not None:
             v = vin.filled()
+
+    # t = tin
+    # u = uin
 
     # Now t, u, v, tin are clean ndarrays; uin and vin are masked,
     # but don't necessarily have masked values.

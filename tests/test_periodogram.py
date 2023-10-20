@@ -3,7 +3,7 @@ Tests for periodogram module.
 """
 import numpy as np
 
-import utide.periodogram as pgram
+import utide2D.periodogram as pgram
 
 
 def random_ts(ndays, dt_hours, is_complex=True):

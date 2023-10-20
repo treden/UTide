@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from pandas import date_range
 
-from utide import reconstruct, solve
-from utide.utilities import Bunch
+from utide2D import reconstruct, solve
+from utide2D.utilities import Bunch
 
 
 def _fake_tide(t, M2amp, M2phase):

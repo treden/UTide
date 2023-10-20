@@ -11,7 +11,7 @@ to u_tide ut_astron::
 """
 import numpy as np
 
-from utide.astronomy import ut_astron
+from utide2D.astronomy import ut_astron
 
 
 def test_astron():

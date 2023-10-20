@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from utide import reconstruct, solve
-from utide._ut_constants import constit_index_dict, ut_constants
+from utide2D import reconstruct, solve
+from utide2D._ut_constants import constit_index_dict, ut_constants
 
 ts = 735604
 duration = 35
