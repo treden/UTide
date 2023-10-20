@@ -9,9 +9,9 @@ Smoke testing--just see if the system runs.
 import numpy as np
 import pytest
 
-from utide2D import reconstruct, solve
-from utide2D._ut_constants import ut_constants
-from utide2D.utilities import Bunch
+from utide import reconstruct, solve
+from utide._ut_constants import ut_constants
+from utide.utilities import Bunch
 
 ts = 735604
 duration = 35

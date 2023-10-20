@@ -3,7 +3,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from utide2D._time_conversion import _date2num, _normalize_time
+from utide._time_conversion import _date2num, _normalize_time
 
 
 def test_formats():
