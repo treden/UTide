@@ -1,7 +1,7 @@
 import numpy as np
 
 from ._time_conversion import _normalize_time
-from .harmonics import ut_E
+from .harmonics import ut_E, FUV
 from .utilities import Bunch
 
 
@@ -11,6 +11,7 @@ def reconstruct(
     epoch=None,
     verbose=True,
     constit=None,
+    solver = '1D',
     min_SNR=2,
     min_PE=0,
 ):
@@ -73,15 +74,37 @@ def reconstruct(
     goodmask = ~np.ma.getmaskarray(t)
     t = t.compressed()
 
-    u, v = _reconstruct(
-        t,
-        goodmask,
-        coef,
-        verbose=verbose,
-        constit=constit,
-        min_SNR=min_SNR,
-        min_PE=min_PE,
-    )
+    if solver == '2D':
+
+        u = []
+
+        for i in range(len(t)):
+    
+            _u = _reconstruct2(
+            t[i],
+            goodmask,
+            coef,
+            verbose=verbose,
+            constit=constit,
+            min_SNR=min_SNR,
+            min_PE=min_PE,
+            )
+
+            u.append(_u)
+    
+        u = np.vstack(u)
+        v = None
+
+    elif solver == '1D':
+        u, v = _reconstruct1(
+            t,
+            goodmask,
+            coef,
+            verbose=verbose,
+            constit=constit,
+            min_SNR=min_SNR,
+            min_PE=min_PE,
+        )
 
     if v is not None:
         out.u, out.v = u, v
@@ -90,7 +113,7 @@ def reconstruct(
     return out
 
 
-def _reconstruct(t, goodmask, coef, verbose, constit, min_SNR, min_PE):
+def _reconstruct1(t, goodmask, coef, verbose, constit, min_SNR, min_PE):
     twodim = coef["aux"]["opt"]["twodim"]
 
     # Determine constituents to include.
@@ -170,3 +193,32 @@ def _reconstruct(t, goodmask, coef, verbose, constit, min_SNR, min_PE):
         print("done.")
 
     return u, v
+
+def _reconstruct2(t, goodmask, coef, verbose, constit, min_SNR, min_PE):
+    
+    twodim = coef["aux"]["opt"]["twodim"]
+
+    # Determine constituents to include.
+    if constit is not None:
+        ind = [i for i, c in enumerate(coef["name"]) if c in constit]
+    elif (min_SNR == 0 and min_PE == 0) or coef["aux"]["opt"]["nodiagn"]:
+        ind = slice(None)
+    else:
+        if twodim:
+            E = coef["Lsmaj"] ** 2 + coef["Lsmin"] ** 2
+            N = (coef["Lsmaj_ci"] / 1.96) ** 2 + (coef["Lsmin_ci"] / 1.96) ** 2
+        else:
+            E = coef["A"] ** 2
+            N = (coef["A_ci"] / 1.96) ** 2
+        SNR = E / N
+        PE = 100 * E / E.sum()
+        with np.errstate(invalid="ignore"):
+            ind = np.logical_and(SNR >= min_SNR, PE >= min_PE)
+
+    A, g, Z0, lat = coef.A.T[:, ind], coef.g.T[:, ind], coef.mean, coef.aux.lat
+    
+    F, U, V = FUV(t, t, coef["aux"]["lind"][ind], lat, [0, 0, 0, 0])
+    V = V[0, :] * 360
+    U = U[0, :] * 360
+
+    return Z0 + np.sum(F * A * np.cos(np.deg2rad((- g + V + U) % 360)), axis=1)
